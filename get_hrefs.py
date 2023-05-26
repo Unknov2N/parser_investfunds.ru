@@ -9,15 +9,16 @@ import pandas as pd
 from datetime import datetime
 import time
 
-FILE_NAME = "investfunds.ru-PIF_" + str(datetime.now().date()) + '_' + \
+FILE_NAME = "investfunds_hrefs//investfunds.ru-PIF_" + str(datetime.now().date()) + '_' + \
             str(datetime.now().time())[:8].replace(':','-') + ".csv"
 URL_TEMPLATE = "https://investfunds.ru/fund-rankings/fund-yield/"
 URL_SITE = "https://investfunds.ru"
 
 
-def parsing():
+def get_hrefs():
     r = requests.get(URL_TEMPLATE)
     if r.status_code - 200:
+        print(f"ERROR: cannot create connection to {URL_TEMPLATE}")
         return None
 
     # находим все фонды
@@ -31,13 +32,11 @@ def parsing():
         if each_part.find('a'):
             href = each_part.a['href']
             result_list.add(URL_SITE + href)
-            #print(href)
-    return result_list
+
+    result_list_dict = {'href': list(result_list)}
+    return result_list_dict
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    file = pd.DataFrame(data=parsing())
-    file.to_csv(FILE_NAME,sep=';')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    file = pd.DataFrame(data=get_hrefs())
+    file.to_csv(FILE_NAME, sep=';', index=False)
