@@ -1,13 +1,6 @@
-# This is a sample Python script.
-import datetime
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import requests
 from bs4 import BeautifulSoup as bs
 import pandas as pd
-from datetime import datetime
-import time
 
 FILE_NAME = "investfunds.ru-hrefs" + ".csv"
 URL_TEMPLATE = "https://investfunds.ru/fund-rankings/fund-yield/"
