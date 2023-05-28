@@ -1,15 +1,14 @@
+import re
 import json
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup as bs
 
-# using proxy https://ru.stackoverflow.com/questions/673069/%D0%9E%D1%88%D0%B8%D0%B1%D0%BA%D0%B0-typeerror-nonetype-object-is-not-subscriptable
-FILE_NAME = "parsed_funds//investfunds.ru-PIFs_" + str(datetime.now().date()) + '_' + \
-            str(datetime.now().time())[:8].replace(':','-') + ".csv"
-#URL_TEMPLATE = "https://investfunds.ru/fund-rankings/fund-yield/"
-#URL_SITE = "https://investfunds.ru"
+FILE_NAME = "investfunds.ru-PIFs" + ".csv"
+
 PROXY_LIST = "https://proxylist.geonode.com/api/proxy-list?limit=500&page=1&sort_by=lastChecked&sort_type=desc"
 
 
@@ -64,7 +63,7 @@ def parsing_hrefs():
             # 'http': 'http://195.9.149.198:8081',
         }
         page = requests.get(href, headers=head, proxies=proxy)
-        if not page.status_code == 200:
+        if page.status_code != 200:
             print(f"ERROR: cannot create connection to {href}")
             return None
 
@@ -86,11 +85,11 @@ def parsing_hrefs():
                     result_list['География'].append(item.contents[3].text)
 
         if len(result_list['Объект']) < i+1:
-            result_list['Объект'].append("Empty")
+            result_list['Объект'].append(None)
         if len(result_list['Специализация']) < i+1:
-            result_list['Специализация'].append("Empty")
+            result_list['Специализация'].append(None)
         if len(result_list['География']) < i + 1:
-            result_list['География'].append("Empty")
+            result_list['География'].append(None)
 
         common_info = soup.find(attrs={"data-modul": "info"}).find_all('li', class_='item')
         for item in common_info:
@@ -98,12 +97,12 @@ def parsing_hrefs():
                 case "Валюта":
                     result_list['Валюта'].append(item.contents[3].text)
                 case "Пайщики":
-                    result_list['Пайщики'].append(item.contents[3].text)
-
+                    result_list['Пайщики'].append(int(item.contents[3].text.replace(' ','')))
+                    
         if len(result_list['Валюта']) < i+1:
-            result_list['Валюта'].append("Empty")
+            result_list['Валюта'].append(None)
         if len(result_list['Пайщики']) < i+1:
-            result_list['Пайщики'].append(-1)
+            result_list['Пайщики'].append(np.nan)
             pass
 
         # Оплата, условия
@@ -112,29 +111,30 @@ def parsing_hrefs():
             if len(item.contents) > 3:  # обход проблемы несоответствия "вознаграждение депозитарию"
                 match item.contents[1].text:
                     case "Первоначальный взнос":
-                        result_list['Взнос'].append(int(item.contents[3].text.split(' ',1)[0]))
+                        result_list['Взнос'].append(int(item.contents[3].text.rsplit(' ', 1)[0].replace(' ', '')))    
+                            #item.contents[3].text.replace("A-z", '')))  # rsplit(' ',1)[0].replace(' ', '')))
                     case "Последующий взнос":
-                        result_list['пВзнос'].append(int(item.contents[3].text.split(' ',1)[0]))
+                        result_list['пВзнос'].append(int(item.contents[3].text.rsplit(' ', 1)[0].replace(' ', '')))
                     case "Вознаграждение УК":
                         result_list['Вознаграждение'].append\
                             (float(item.contents[3].text.split(r'%',1)[0].translate({ord(' '): None, ord('\n'): None})))
                     case "Вознаграждение депозитарию и др.":
                         result_list['Депозитарию'].append\
-                        (float(item.contents[3].text.split(r'%', 1)[0].translate({' ': '','\n': ''})))
+                        (float(item.contents[3].text.split(r'%', 1)[0].translate({ord(' '): None, ord('\n'): None})))
                     case "Прочие расходы":
                         result_list['Прочие'].append\
-                            (float(item.contents[3].text.split(r'%', 1)[0].translate({' ': '','\n': ''})))
+                            (float(item.contents[3].text.split(r'%', 1)[0].translate({ord(' '): None, ord('\n'): None})))
 
         if len(result_list['пВзнос']) < i+1:
-            result_list['пВзнос'].append(-1)
+            result_list['пВзнос'].append(np.nan)
         if len(result_list['Вознаграждение']) < i+1:
-            result_list['Вознаграждение'].append(-1)
+            result_list['Вознаграждение'].append(np.nan)
         if len(result_list['Депозитарию']) < i+1:
-            result_list['Депозитарию'].append(-1)
+            result_list['Депозитарию'].append(np.nan)
         if len(result_list['Прочие']) < i+1:
-            result_list['Прочие'].append(-1)
+            result_list['Прочие'].append(np.nan)
             pass
-        разобраться        с        глобальной share_percents, assets_percents https://metanit.com/python/tutorial/2.9.php
+
         # пай и СЧА тянем одновременно по проверке пая (2 известных варианта)
         share_bs = soup.find('tr', class_='field_fixed_0 rublast')
         assets_bs = soup.find('tr', class_='field_fixed_1 rublast')
@@ -142,7 +142,6 @@ def parsing_hrefs():
             result_list['Пай'].append(float(share_bs.contents[3].text))
             result_list['СЧА'].append(float(assets_bs.contents[3].text.replace(' ', '')))
 
-            global share_percents, assets_percents
             share_percents = soup.find('tr', class_='field_scroll_0 rublast')
             assets_percents = soup.find('tr', class_='field_scroll_1 rublast')
         else:
@@ -151,74 +150,84 @@ def parsing_hrefs():
             if share_bs is not None:
                 result_list['Пай'].append(float(share_bs.contents[3].text))
                 result_list['СЧА'].append(float(assets_bs.contents[3].text.replace(' ', '')))
-                global share_percents, assets_percents
                 share_percents = soup.find('tr', class_='field_scroll_0 otherCurrencylast')
                 assets_percents = soup.find('tr', class_='field_scroll_1 otherCurrencylast')
         # Заполняем проценты по 6 мес -- 5 лет
         if share_bs is not None:
             if share_percents.contents[7].text != '—':
-                result_list['6месП'].append(float(share_percents.contents[7].text.replace('%', '')))
+                result_list['6месП'].append(float(share_percents.contents[7].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['6месП'].append(-1)
+                result_list['6месП'].append(np.nan)
             if share_percents.contents[9].text != '—':
-                result_list['1годП'].append(float(share_percents.contents[9].text.replace('%', '')))
+                result_list['1годП'].append(float(share_percents.contents[9].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['1годП'].append(-1)
+                result_list['1годП'].append(np.nan)
             if share_percents.contents[11].text != '—':
-                result_list['3годаП'].append(float(share_percents.contents[11].text.replace('%', '')))
+                result_list['3годаП'].append(float(share_percents.contents[11].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['3годаП'].append(-1)
+                result_list['3годаП'].append(np.nan)
             if share_percents.contents[13].text != '—':
-                result_list['5летП'].append(float(share_percents.contents[13].text.replace('%', '')))
+                result_list['5летП'].append(float(share_percents.contents[13].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['5летП'].append(-1)
+                result_list['5летП'].append(np.nan)
 
             if assets_percents.contents[7].text != '—':
-                result_list['6месС'].append(float(assets_percents.contents[7].text.replace('%', '')))
+                result_list['6месС'].append(float(assets_percents.contents[7].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['6месС'].append(-1)
+                result_list['6месС'].append(np.nan)
             if assets_percents.contents[9].text != '—':
-                result_list['1годС'].append(float(assets_percents.contents[9].text.replace('%', '')))
+                result_list['1годС'].append(float(assets_percents.contents[9].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['1годС'].append(-1)
+                result_list['1годС'].append(np.nan)
             if assets_percents.contents[11].text != '—':
-                result_list['3годаС'].append(float(assets_percents.contents[11].text.replace('%', '')))
+                result_list['3годаС'].append(float(assets_percents.contents[11].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['3годаС'].append(-1)
+                result_list['3годаС'].append(np.nan)
             if assets_percents.contents[13].text != '—':
-                result_list['5летС'].append(float(assets_percents.contents[13].text.replace('%', '')))
+                result_list['5летС'].append(float(assets_percents.contents[13].text.translate({ord(' '): None, ord('%'): None})))
             else:
-                result_list['5летС'].append(-1)
+                result_list['5летС'].append(np.nan)
         # в случае третьего варианта
         else:
-            result_list['Пай'].append(-1)
-            result_list['6месП'].append(-1)
-            result_list['1годП'].append(-1)
-            result_list['3годаП'].append(-1)
-            result_list['5летП'].append(-1)
+            result_list['Пай'].append(np.nan)
+            result_list['6месП'].append(np.nan)
+            result_list['1годП'].append(np.nan)
+            result_list['3годаП'].append(np.nan)
+            result_list['5летП'].append(np.nan)
             
-            result_list['СЧА'].append(-1)
-            result_list['6месС'].append(-1)
-            result_list['1годС'].append(-1)
-            result_list['3годаС'].append(-1)
-            result_list['5летС'].append(-1)
+            result_list['СЧА'].append(np.nan)
+            result_list['6месС'].append(np.nan)
+            result_list['1годС'].append(np.nan)
+            result_list['3годаС'].append(np.nan)
+            result_list['5летС'].append(np.nan)
 
         # Коэффициенты
         coefficients_list = soup.find(attrs={"data-modul": "coefficient"})
         if coefficients_list is not None:
-            coefficients_list = coefficients_list.find_all('tr', class_='item')
+            coefficients_list = coefficients_list.find_all('td', class_='text_center')
 
-            i+=0
-
-
-
+            result_list['кШарпа'].append(float(coefficients_list[0].text))
+            result_list['кСортино'].append(float(coefficients_list[2].text))
+            result_list['Волатильность'].append(float(coefficients_list[4].text.replace(r'%', '')))
+            result_list['VaR'].append(float(coefficients_list[6].text.replace(r'%', '')))
+            result_list['alpha'].append(float(coefficients_list[8].text))
+            result_list['beta'].append(float(coefficients_list[10].text))
+            result_list['R2'].append(float(coefficients_list[12].text.replace(r'%', '')))
+        else:
+            result_list['кШарпа'].append(np.nan)
+            result_list['кСортино'].append(np.nan)
+            result_list['Волатильность'].append(np.nan)
+            result_list['VaR'].append(np.nan)
+            result_list['alpha'].append(np.nan)
+            result_list['beta'].append(np.nan)
+            result_list['R2'].append(np.nan)
 
         i += 1
     return result_list
 
 
 if __name__ == '__main__':
-    #result = parsing_hrefs()
+    # result = parsing_hrefs()
     j = 1
     file = pd.DataFrame(data=parsing_hrefs())
     file.to_csv(FILE_NAME, sep=';', encoding="cp1251")

@@ -9,8 +9,7 @@ import pandas as pd
 from datetime import datetime
 import time
 
-FILE_NAME = "investfunds_hrefs//investfunds.ru-PIF_" + str(datetime.now().date()) + '_' + \
-            str(datetime.now().time())[:8].replace(':','-') + ".csv"
+FILE_NAME = "investfunds.ru-hrefs" + ".csv"
 URL_TEMPLATE = "https://investfunds.ru/fund-rankings/fund-yield/"
 URL_SITE = "https://investfunds.ru"
 
