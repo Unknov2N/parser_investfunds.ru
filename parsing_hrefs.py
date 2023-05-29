@@ -13,9 +13,11 @@ def parsing_hrefs():
     # если хотим использовать свежий список прокси
     # r = requests.get(PROXY_LIST)
     # if r.status_code - 200:
-    #   print(f"ERROR: cannot create connection to proxy_list by href {PROXY_LIST}")
-    #   return None
+    #    print(f"ERROR: cannot create connection to proxy_list by href {PROXY_LIST}")
+    #    return None
+    # proxy_list = json.loads(r.text)
 
+    # если хотим использовать готовый файл
     r = open("proxylist.txt")
     proxy_list = json.loads(r.read())
 
